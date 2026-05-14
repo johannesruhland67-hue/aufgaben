@@ -804,10 +804,11 @@ const DEFAULT_GEBURTSTAGE = [
   {id:'g61', monat:'Dez', name:'Daniel Berger',                  datum:'17.12.', notiz:'?'},
 ];
 
-// ── Cloud Sync (JSONBin.io) ──────────────────────────
-const JSONBIN_KEY = '$2a$10$CUHRdyd3lI/23FED/Ylq1.ymiKt/a3d4DCCoCu8kskv5zCr0tr2s6';
-const JSONBIN_URL = 'https://api.jsonbin.io/v3/b';
-let BIN_ID = null;
+// ── Cloud Sync (GitHub Gist) ──────────────────────────
+const GIST_TOKEN = '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';
+const GIST_FILENAME = 'aufgaben_ruhland_data.json';
+const GIST_API = 'https://api.github.com/gists';
+let GIST_ID = 'd02b76168ae3558d540e0333f9bf309f';
 let syncTimer = null;
 
 function setSyncBadge(state, text) {
@@ -820,53 +821,35 @@ function setSyncBadge(state, text) {
 async function saveCloud(data) {
   try {
     setSyncBadge('syncing', '☁ speichert …');
-    if (!BIN_ID) {
-      // Create new bin
-      const r = await fetch(JSONBIN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': JSONBIN_KEY,
-          'X-Bin-Name': 'aufgaben_ruhland',
-          'X-Bin-Private': 'true'
-        },
-        body: JSON.stringify(data)
-      });
-      const j = await r.json();
-      BIN_ID = j.metadata?.id;
-      if (BIN_ID) {
-        localStorage.setItem('jsonbin_id_ruhland', BIN_ID);
-        setSyncBadge('ok', '☁ synchronisiert ✓');
-        setTimeout(() => setSyncBadge('', '☁ synchronisiert'), 2500);
-      }
-    } else {
-      // Update existing bin
-      await fetch(`${JSONBIN_URL}/${BIN_ID}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': JSONBIN_KEY
-        },
-        body: JSON.stringify(data)
-      });
-      setSyncBadge('ok', '☁ synchronisiert ✓');
-      setTimeout(() => setSyncBadge('', '☁ synchronisiert'), 2500);
-    }
+    await fetch(`${GIST_API}/${GIST_ID}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `token ${GIST_TOKEN}`,
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify({ files: { [GIST_FILENAME]: { content: JSON.stringify(data) } } })
+    });
+    setSyncBadge('ok', '☁ synchronisiert ✓');
+    setTimeout(() => setSyncBadge('', '☁ synchronisiert'), 2500);
   } catch(e) {
     setSyncBadge('error', '☁ offline (lokal)');
   }
 }
 
 async function loadCloud() {
-  BIN_ID = localStorage.getItem('jsonbin_id_ruhland');
-  if (!BIN_ID) return null;
+  // Use hardcoded GIST_ID - no localStorage needed
   try {
-    const r = await fetch(`${JSONBIN_URL}/${BIN_ID}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_KEY }
+    const r = await fetch(`${GIST_API}/${GIST_ID}`, {
+      headers: {
+        'Authorization': `token ${GIST_TOKEN}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
     });
     if (!r.ok) return null;
     const j = await r.json();
-    return j.record || null;
+    const content = j.files?.[GIST_FILENAME]?.content;
+    return content ? JSON.parse(content) : null;
   } catch(e) { return null; }
 }
 
