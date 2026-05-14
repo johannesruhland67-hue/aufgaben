@@ -804,11 +804,10 @@ const DEFAULT_GEBURTSTAGE = [
   {id:'g61', monat:'Dez', name:'Daniel Berger',                  datum:'17.12.', notiz:'?'},
 ];
 
-// ── Cloud Sync (GitHub Gist) ──────────────────────────
-const GIST_TOKEN = ['ghp_JTC1No','0YClgRHg3G','ljpQjut4wPobWm3LNdtA'].join('');
-const GIST_FILENAME = 'aufgaben_ruhland_data.json';
-const GIST_API = 'https://api.github.com/gists';
-let GIST_ID = 'd02b76168ae3558d540e0333f9bf309f';
+// ── Cloud Sync (Supabase) ──────────────────────────
+const SUPA_URL = 'https://jnxfrpfurttaplhjtkat.supabase.co/rest/v1';
+const SUPA_KEY = 'sb_publishable_hH4TScsuJTf8vJlHh5r-dg_Ba399FX-';
+const SUPA_ROW = 'aufgaben_ruhland';
 let syncTimer = null;
 
 function setSyncBadge(state, text) {
@@ -821,14 +820,15 @@ function setSyncBadge(state, text) {
 async function saveCloud(data) {
   try {
     setSyncBadge('syncing', '☁ speichert …');
-    await fetch(`${GIST_API}/${GIST_ID}`, {
-      method: 'PATCH',
+    await fetch(`${SUPA_URL}/sync`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `token ${GIST_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json'
+        'apikey': SUPA_KEY,
+        'Authorization': `Bearer ${SUPA_KEY}`,
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
-      body: JSON.stringify({ files: { [GIST_FILENAME]: { content: JSON.stringify(data) } } })
+      body: JSON.stringify({ key: SUPA_ROW, value: JSON.stringify(data) })
     });
     setSyncBadge('ok', '☁ synchronisiert ✓');
     setTimeout(() => setSyncBadge('', '☁ synchronisiert'), 2500);
@@ -838,18 +838,17 @@ async function saveCloud(data) {
 }
 
 async function loadCloud() {
-  // Use hardcoded GIST_ID - no localStorage needed
   try {
-    const r = await fetch(`${GIST_API}/${GIST_ID}`, {
+    const r = await fetch(`${SUPA_URL}/sync?key=eq.${SUPA_ROW}&select=value`, {
       headers: {
-        'Authorization': `token ${GIST_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json'
+        'apikey': SUPA_KEY,
+        'Authorization': `Bearer ${SUPA_KEY}`
       }
     });
     if (!r.ok) return null;
     const j = await r.json();
-    const content = j.files?.[GIST_FILENAME]?.content;
-    return content ? JSON.parse(content) : null;
+    if (!j.length) return null;
+    return JSON.parse(j[0].value);
   } catch(e) { return null; }
 }
 
