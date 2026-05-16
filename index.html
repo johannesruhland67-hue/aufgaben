@@ -580,8 +580,31 @@
 
 <div class="view" id="view-termine">
   <div class="view-header">
-    <div class="view-title">Termine 2026</div>
-    <button class="add-btn" style="margin-left:auto" onclick="addTerminGlobal()">+ Termin</button>
+    <div class="view-title">📅 Termine</div>
+    <div style="display:flex;gap:6px;margin-left:auto;align-items:center;">
+      <button class="filter-btn active" id="yr-2026" onclick="setTerminJahr(2026,this)">2026</button>
+      <button class="filter-btn" id="yr-2027" onclick="setTerminJahr(2027,this)">2027</button>
+      <button class="add-btn" onclick="openTerminForm()">+ Termin</button>
+    </div>
+  </div>
+  <!-- Add form -->
+  <div id="terminForm" style="display:none;max-width:900px;margin:0 auto 14px;background:white;border:1px solid var(--heute-border);border-radius:8px;padding:14px;display:none;flex-direction:column;gap:10px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--muted);">NEUER TERMIN</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input id="tf-datum" type="text" placeholder="Datum z.B. 1305" maxlength="8"
+        style="font-family:'IBM Plex Mono',monospace;font-size:15px;padding:11px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);outline:none;width:140px;min-height:44px;"
+        oninput="formatTerminDatum(this)" onkeydown="if(event.key==='Enter')focusTerminText()">
+      <input id="tf-text" type="text" placeholder="Termin beschreibung …"
+        style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;padding:11px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);outline:none;flex:1;min-width:160px;min-height:44px;"
+        onkeydown="if(event.key==='Enter')saveTerminForm()">
+      <input id="tf-notiz" type="text" placeholder="Notiz (optional)"
+        style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:11px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);outline:none;flex:1;min-width:120px;min-height:44px;"
+        onkeydown="if(event.key==='Enter')saveTerminForm()">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeTerminForm()" style="font-family:'IBM Plex Mono',monospace;font-size:13px;padding:10px 16px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;cursor:pointer;min-height:44px;">Abbrechen</button>
+      <button onclick="saveTerminForm()" style="font-family:'IBM Plex Mono',monospace;font-size:13px;padding:10px 20px;background:var(--text);color:white;border:none;border-radius:6px;cursor:pointer;min-height:44px;">Speichern</button>
+    </div>
   </div>
   <div class="table-wrap"><table class="simple-table" id="termineTable"></table></div>
 </div>
@@ -971,15 +994,28 @@ function noteHtml(n) {
 }
 
 // ── Render tasks (mobile card layout) ──
+function parseZeit(z) {
+  // Parse "HH:MM" or "HH:MM-HH:MM" or "HH:MM–HH:MM", return minutes from midnight for start
+  if (!z) return 9999;
+  const m = z.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return 9999;
+  return parseInt(m[1]) * 60 + parseInt(m[2]);
+}
+
 function buildRow(t) {
   const cls = prioClass(t.prio);
+  const isHeute = t.prio === 'Heute';
+  const zeitPlaceholder = isHeute ? '08:00–08:30' : 'Uhrzeit …';
   return `
   <div class="task-row ${cls}" id="tr-${t.id}"
     draggable="true"
     ondragstart="dragStart(event,${t.id})"
     ondragover="dragOver(event,${t.id})"
     ondragleave="dragLeave(event,${t.id})"
-    ondrop="dragDrop(event,${t.id})">
+    ondrop="dragDrop(event,${t.id})"
+    ontouchstart="touchStart(event,${t.id})"
+    ontouchmove="touchMove(event)"
+    ontouchend="touchEnd(event,${t.id})">
     <div class="t-top">
       <div class="drag-handle" title="Ziehen">⠿</div>
       <div class="task-prio">${t.prio}</div>
@@ -987,11 +1023,11 @@ function buildRow(t) {
         <div class="task-text">${t.text}</div>
         ${noteHtml(t.notiz)}
       </div>
-      <div class="task-bereich">${t.bereich}</div>
+      ${isHeute ? '' : `<div class="task-bereich">${t.bereich}</div>`}
     </div>
     <div class="t-bot">
       <div class="task-zeit">
-        <input class="zeit-input" type="text" value="${t.zeit||''}" placeholder="Uhrzeit …"
+        <input class="zeit-input" type="text" value="${t.zeit||''}" placeholder="${zeitPlaceholder}"
           onchange="setZeit(${t.id},this.value)" onclick="event.stopPropagation()">
       </div>
       <div class="task-actions">
@@ -1010,7 +1046,19 @@ function renderTasks() {
   const show = currentFilter === 'alle' ? PRIO_ORDER : [currentFilter];
   let html = '';
   show.forEach(prio => {
-    const group = tasks.filter(t=>t.prio===prio).sort((a,b)=>(a.ord??0)-(b.ord??0));
+    let group = tasks.filter(t=>t.prio===prio);
+    if (prio === 'Heute') {
+      // Sort by time if set, otherwise by ord
+      group = group.sort((a,b) => {
+        const ta = parseZeit(a.zeit), tb = parseZeit(b.zeit);
+        if (ta === 9999 && tb === 9999) return (a.ord??0)-(b.ord??0);
+        if (ta === 9999) return 1;
+        if (tb === 9999) return -1;
+        return ta - tb;
+      });
+    } else {
+      group = group.sort((a,b)=>(a.ord??0)-(b.ord??0));
+    }
     if (!group.length) return;
     html += `<div class="section-header">${SECTION_LABELS[prio]||prio}</div>`;
     html += group.map(buildRow).join('');
@@ -1049,40 +1097,187 @@ function renderDone() {
 }
 
 // ── Termine ──
+let terminJahr = 2026;
+
+function setTerminJahr(jahr, btn) {
+  terminJahr = jahr;
+  document.querySelectorAll('#yr-2026,#yr-2027').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTermine();
+}
+
+function parseDatumInput(s) {
+  // Accepts: 1305, 13.05, 13.05., 13.5, 5.3
+  s = s.replace(/[.\-\/]/g,'').trim();
+  if (s.length < 3) return null;
+  let day, month;
+  if (s.length === 4) { day = parseInt(s.slice(0,2)); month = parseInt(s.slice(2,4)); }
+  else if (s.length === 3) { day = parseInt(s.slice(0,1)); month = parseInt(s.slice(1,3)); }
+  else return null;
+  if (day < 1||day > 31||month < 1||month > 12) return null;
+  return { day, month, datum: String(day).padStart(2,'0')+'.'+String(month).padStart(2,'0')+'.' };
+}
+
+function datumToSortKey(datum) {
+  // "13.05." → 1305
+  const m = datum.match(/(\d{1,2})\.(\d{1,2})\./);
+  if (!m) return 9999;
+  return parseInt(m[2]) * 100 + parseInt(m[1]);
+}
+
+function monatFromDatum(datum) {
+  const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const m = datum.match(/(\d{1,2})\.(\d{1,2})\./);
+  if (!m) return 'Jan';
+  return MONTHS[parseInt(m[2])-1] || 'Jan';
+}
+
+function formatTerminDatum(input) {
+  // Live format as user types
+  let v = input.value.replace(/[^0-9]/g,'');
+  if (v.length > 4) v = v.slice(0,4);
+  input.value = v;
+}
+
+function focusTerminText() {
+  const tf = document.getElementById('tf-datum');
+  const parsed = parseDatumInput(tf.value);
+  if (!parsed) { tf.style.borderColor='#EF4444'; tf.focus(); return; }
+  tf.style.borderColor='var(--heute-border)';
+  document.getElementById('tf-text').focus();
+}
+
+function openTerminForm() {
+  const f = document.getElementById('terminForm');
+  f.style.display = 'flex';
+  setTimeout(()=>document.getElementById('tf-datum').focus(), 50);
+}
+
+function closeTerminForm() {
+  const f = document.getElementById('terminForm');
+  f.style.display = 'none';
+  ['tf-datum','tf-text','tf-notiz'].forEach(id=>document.getElementById(id).value='');
+}
+
+function saveTerminForm() {
+  const datumRaw = document.getElementById('tf-datum').value;
+  const text = document.getElementById('tf-text').value.trim();
+  if (!text) { document.getElementById('tf-text').focus(); return; }
+  const parsed = parseDatumInput(datumRaw);
+  if (!parsed) { document.getElementById('tf-datum').style.borderColor='#EF4444'; document.getElementById('tf-datum').focus(); return; }
+  const notiz = document.getElementById('tf-notiz').value.trim();
+  const monat = monatFromDatum(parsed.datum);
+  termine.push({id:'te'+Date.now(), jahr:terminJahr, monat, datum:parsed.datum, termin:text, notiz});
+  save(); closeTerminForm(); renderTermine();
+}
+
 function renderTermine() {
-  const now = new Date(); const curMonth = now.getMonth();
-  const monthNums = {Jan:0,Feb:1,Mär:2,Apr:3,Mai:4,Jun:5,Jul:6,Aug:7,Sep:8,Okt:9,Nov:10,Dez:11};
+  const now = new Date(); const curMonth = now.getMonth()+1; const curDay = now.getDate();
+  const jahrTermine = termine.filter(t=>(t.jahr||2026)===terminJahr)
+    .sort((a,b)=>datumToSortKey(a.datum)-datumToSortKey(b.datum));
+
   const ALL_MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  let html = `<thead><tr><th>Monat</th><th>Datum</th><th>Termin</th><th>Notiz</th><th style="width:52px"></th></tr></thead><tbody>`;
-  ALL_MONTHS.forEach(mo => {
-    const entries = termine.filter(t=>t.monat===mo);
-    const upcoming = monthNums[mo] === curMonth;
-    if (!entries.length) {
-      html += `<tr${upcoming?' class="upcoming"':''}><td class="mono month-label">${mo}</td><td class="mono" style="color:var(--border)">–</td><td style="color:var(--border);font-style:italic">–</td><td></td><td class="edit-cell"><button class="row-add-btn" onclick="addTermin('${mo}')">+</button></td></tr>`;
-    } else {
-      entries.forEach((t,i) => {
-        html += `<tr${upcoming?' class="upcoming"':''}><td class="mono month-label">${i===0?mo:''}</td><td class="mono">${t.datum}</td><td>${t.termin}</td><td class="notiz-col">${t.notiz||''}</td><td class="edit-cell"><button class="row-edit-btn" onclick="editTermin('${t.id}')">✎</button><button class="row-del-btn" onclick="deleteTermin('${t.id}')">✕</button>${i===0?`<button class="row-add-btn" onclick="addTermin('${mo}')">+</button>`:''}</td></tr>`;
-      });
-    }
-  });
+  const monthNums = {Jan:1,Feb:2,Mär:3,Apr:4,Mai:5,Jun:6,Jul:7,Aug:8,Sep:9,Okt:10,Nov:11,Dez:12};
+
+  let html = `<thead><tr><th>Datum</th><th>Termin</th><th>Notiz</th><th style="width:80px"></th></tr></thead><tbody>`;
+
+  if (!jahrTermine.length) {
+    html += `<tr><td colspan="4" style="color:var(--muted);font-style:italic;padding:20px">Keine Termine für ${terminJahr}.</td></tr>`;
+  } else {
+    let lastMonth = '';
+    jahrTermine.forEach(t => {
+      const mo = t.monat;
+      const mn = monthNums[mo]||0;
+      const dayParts = t.datum.match(/(\d+)\.(\d+)\./);
+      const isUpcoming = terminJahr === now.getFullYear() && mn === curMonth;
+      const isToday = isUpcoming && dayParts && parseInt(dayParts[1]) === curDay;
+      const rowCls = isToday ? 'upcoming' : (isUpcoming ? 'upcoming' : '');
+
+      let monthCell = '';
+      if (mo !== lastMonth) {
+        monthCell = mo;
+        lastMonth = mo;
+      }
+
+      html += `<tr class="${rowCls}" id="trow-${t.id}">
+        <td class="mono" style="white-space:nowrap;">
+          ${monthCell ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--section-text);text-transform:uppercase;margin-right:6px;">${monthCell}</span>` : ''}
+          <span class="termin-datum" onclick="editTerminDatum('${t.id}')" style="cursor:pointer;border-bottom:1px dashed var(--border);" title="Klicken zum Ändern">${t.datum}</span>
+        </td>
+        <td>
+          <span class="termin-text" onclick="editTerminText('${t.id}')" style="cursor:pointer;" title="Klicken zum Ändern">${t.termin}</span>
+        </td>
+        <td class="notiz-col">
+          <span onclick="editTerminNotiz('${t.id}')" style="cursor:pointer;" title="Klicken zum Ändern">${t.notiz||'<span style="color:var(--border)">–</span>'}</span>
+        </td>
+        <td class="edit-cell">
+          <button class="row-del-btn" onclick="deleteTermin('${t.id}')">✕</button>
+        </td>
+      </tr>`;
+    });
+  }
   html += '</tbody>';
   document.getElementById('termineTable').innerHTML = html;
 }
-function addTermin(monat) {
-  const datum=prompt('Datum (z.B. 15.06.):'); if(!datum) return;
-  const termin=prompt('Termin:'); if(!termin) return;
-  const notiz=prompt('Notiz (optional):')||'';
-  termine.push({id:'te'+Date.now(),monat,datum:datum.trim(),termin:termin.trim(),notiz:notiz.trim()});
+
+function editTerminDatum(id) {
+  const t = termine.find(x=>x.id===id); if(!t) return;
+  const el = document.querySelector(`#trow-${id} .termin-datum`);
+  if (!el) return;
+  const old = t.datum;
+  el.innerHTML = `<input type="text" value="${old.replace(/\./g,'').slice(0,4)}" maxlength="4"
+    style="font-family:'IBM Plex Mono',monospace;font-size:13px;width:60px;border:1px solid var(--heute-border);border-radius:4px;padding:2px 4px;outline:none;"
+    onblur="saveTerminDatumEdit('${id}',this.value,'${old}')"
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value='${old.replace(/\./g,'').slice(0,4)}';this.blur();}"
+    >`;
+  el.querySelector('input').focus();
+}
+
+function saveTerminDatumEdit(id, val, old) {
+  const t = termine.find(x=>x.id===id); if(!t) return;
+  const parsed = parseDatumInput(val);
+  if (parsed) {
+    t.datum = parsed.datum;
+    t.monat = monatFromDatum(parsed.datum);
+  }
   save(); renderTermine();
 }
-function editTermin(id) {
-  const t=termine.find(x=>x.id===id); if(!t) return;
-  const datum=prompt('Datum:',t.datum); if(datum===null) return;
-  const termin=prompt('Termin:',t.termin); if(termin===null) return;
-  const notiz=prompt('Notiz:',t.notiz); if(notiz===null) return;
-  t.datum=datum.trim(); t.termin=termin.trim(); t.notiz=notiz.trim();
+
+function editTerminText(id) {
+  const t = termine.find(x=>x.id===id); if(!t) return;
+  const el = document.querySelector(`#trow-${id} .termin-text`);
+  if (!el) return;
+  el.innerHTML = `<input type="text" value="${t.termin}"
+    style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;width:100%;border:1px solid var(--heute-border);border-radius:4px;padding:2px 6px;outline:none;"
+    onblur="saveTerminTextEdit('${id}',this.value)"
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.blur();">`;
+  el.querySelector('input').select();
+  el.querySelector('input').focus();
+}
+
+function saveTerminTextEdit(id, val) {
+  const t = termine.find(x=>x.id===id); if(!t) return;
+  if (val.trim()) t.termin = val.trim();
   save(); renderTermine();
 }
+
+function editTerminNotiz(id) {
+  const t = termine.find(x=>x.id===id); if(!t) return;
+  const el = document.querySelector(`#trow-${id} td:nth-child(3) span`);
+  if (!el) return;
+  el.innerHTML = `<input type="text" value="${t.notiz||''}" placeholder="Notiz …"
+    style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;width:100%;border:1px solid var(--heute-border);border-radius:4px;padding:2px 6px;outline:none;"
+    onblur="saveTerminNotizEdit('${id}',this.value)"
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')this.blur();">`;
+  el.querySelector('input').focus();
+}
+
+function saveTerminNotizEdit(id, val) {
+  const t = termine.find(x=>x.id===id); if(!t) return;
+  t.notiz = val.trim();
+  save(); renderTermine();
+}
+
 function deleteTermin(id) {
   if(!confirm('Termin löschen?')) return;
   termine=termine.filter(x=>x.id!==id); save(); renderTermine();
@@ -1237,6 +1432,65 @@ document.addEventListener('dragend',cleanup);
 function cleanup() {
   document.querySelectorAll('.task-row').forEach(el=>el.classList.remove('dragging','drag-over'));
   dragSrcId=null;
+}
+
+// ── Touch drag (mobile) ──
+let touchSrcId = null, touchClone = null, touchLastOver = null;
+
+function touchStart(e, id) {
+  touchSrcId = id;
+  const row = document.getElementById('tr-'+id);
+  if (!row) return;
+  const rect = row.getBoundingClientRect();
+  touchClone = row.cloneNode(true);
+  touchClone.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;opacity:0.7;z-index:9999;pointer-events:none;`;
+  document.body.appendChild(touchClone);
+  row.style.opacity = '0.35';
+}
+
+function touchMove(e) {
+  if (!touchSrcId || !touchClone) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  touchClone.style.top = (t.clientY - 30) + 'px';
+  touchClone.style.left = touchClone.style.left;
+  // Find element under touch
+  touchClone.style.display = 'none';
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  touchClone.style.display = '';
+  const row = el?.closest('.task-row');
+  if (touchLastOver && touchLastOver !== row) {
+    document.getElementById('tr-'+touchLastOver.dataset.id)?.classList.remove('drag-over');
+  }
+  if (row && row.id !== 'tr-'+touchSrcId) {
+    row.classList.add('drag-over');
+    touchLastOver = row;
+  }
+}
+
+function touchEnd(e, id) {
+  if (!touchSrcId) return;
+  if (touchClone) { touchClone.remove(); touchClone = null; }
+  const row = document.getElementById('tr-'+touchSrcId);
+  if (row) row.style.opacity = '';
+  if (touchLastOver) {
+    const tgtId = parseInt(touchLastOver.id.replace('tr-',''));
+    touchLastOver.classList.remove('drag-over');
+    touchLastOver = null;
+    if (tgtId && tgtId !== touchSrcId) {
+      const src = tasks.find(t=>t.id===touchSrcId);
+      const tgt = tasks.find(t=>t.id===tgtId);
+      if (src && tgt && src.prio === tgt.prio) {
+        const group = tasks.filter(t=>t.prio===src.prio).sort((a,b)=>(a.ord??0)-(b.ord??0));
+        const si = group.findIndex(t=>t.id===touchSrcId);
+        const ti = group.findIndex(t=>t.id===tgtId);
+        group.splice(si,1); group.splice(ti,0,src);
+        group.forEach((t,i)=>{t.ord=i;});
+        save(); renderTasks();
+      }
+    }
+  }
+  touchSrcId = null;
 }
 
 // ── Add form ──
@@ -1507,11 +1761,6 @@ function saveVoice() {
 function closeVoice() { document.getElementById('voiceOverlay').style.display='none'; }
 document.getElementById('voiceOverlay').addEventListener('click',function(e){if(e.target===this)closeVoice();});
 
-function addTerminGlobal() {
-  const ALL=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  const mo=prompt('Monat ('+ALL.join(', ')+'):');
-  if(!mo||!ALL.includes(mo)){if(mo)alert('Ungültiger Monat.');return;} addTermin(mo);
-}
 function addGeburtstagGlobal() {
   const ALL=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const mo=prompt('Monat ('+ALL.join(', ')+'):');
