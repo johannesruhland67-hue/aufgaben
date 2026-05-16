@@ -1173,47 +1173,53 @@ function saveTerminForm() {
 
 function renderTermine() {
   const now = new Date(); const curMonth = now.getMonth()+1; const curDay = now.getDate();
+  const monthNums = {Jan:1,Feb:2,Mär:3,Apr:4,Mai:5,Jun:6,Jul:7,Aug:8,Sep:9,Okt:10,Nov:11,Dez:12};
+  const ALL_MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
   const jahrTermine = termine.filter(t=>(t.jahr||2026)===terminJahr)
     .sort((a,b)=>datumToSortKey(a.datum)-datumToSortKey(b.datum));
 
-  const ALL_MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  const monthNums = {Jan:1,Feb:2,Mär:3,Apr:4,Mai:5,Jun:6,Jul:7,Aug:8,Sep:9,Okt:10,Nov:11,Dez:12};
-
-  let html = `<thead><tr><th>Datum</th><th>Termin</th><th>Notiz</th><th style="width:80px"></th></tr></thead><tbody>`;
+  let html = `<thead><tr><th>Datum</th><th>Termin</th><th>Notiz</th><th style="width:52px"></th></tr></thead><tbody>`;
 
   if (!jahrTermine.length) {
     html += `<tr><td colspan="4" style="color:var(--muted);font-style:italic;padding:20px">Keine Termine für ${terminJahr}.</td></tr>`;
   } else {
-    let lastMonth = '';
+    // Group by month
+    const byMonth = {};
     jahrTermine.forEach(t => {
       const mo = t.monat;
-      const mn = monthNums[mo]||0;
-      const dayParts = t.datum.match(/(\d+)\.(\d+)\./);
-      const isUpcoming = terminJahr === now.getFullYear() && mn === curMonth;
-      const isToday = isUpcoming && dayParts && parseInt(dayParts[1]) === curDay;
-      const rowCls = isToday ? 'upcoming' : (isUpcoming ? 'upcoming' : '');
+      if (!byMonth[mo]) byMonth[mo] = [];
+      byMonth[mo].push(t);
+    });
 
-      let monthCell = '';
-      if (mo !== lastMonth) {
-        monthCell = mo;
-        lastMonth = mo;
-      }
+    ALL_MONTHS.forEach(mo => {
+      if (!byMonth[mo]) return;
+      const mn = monthNums[mo];
+      const isCurrentMonth = terminJahr === now.getFullYear() && mn === curMonth;
 
-      html += `<tr class="${rowCls}" id="trow-${t.id}">
-        <td class="mono" style="white-space:nowrap;">
-          ${monthCell ? `<span style="font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--section-text);text-transform:uppercase;margin-right:6px;">${monthCell}</span>` : ''}
-          <span class="termin-datum" onclick="editTerminDatum('${t.id}')" style="cursor:pointer;border-bottom:1px dashed var(--border);" title="Klicken zum Ändern">${t.datum}</span>
-        </td>
-        <td>
-          <span class="termin-text" onclick="editTerminText('${t.id}')" style="cursor:pointer;" title="Klicken zum Ändern">${t.termin}</span>
-        </td>
-        <td class="notiz-col">
-          <span onclick="editTerminNotiz('${t.id}')" style="cursor:pointer;" title="Klicken zum Ändern">${t.notiz||'<span style="color:var(--border)">–</span>'}</span>
-        </td>
-        <td class="edit-cell">
-          <button class="row-del-btn" onclick="deleteTermin('${t.id}')">✕</button>
-        </td>
-      </tr>`;
+      // Month header row
+      html += `<tr><td colspan="4" class="month-label"${isCurrentMonth?' style="background:#FDE68A"':''}>${mo}</td></tr>`;
+
+      byMonth[mo].forEach(t => {
+        const dayParts = t.datum.match(/(\d+)\.(\d+)\./);
+        const isToday = isCurrentMonth && dayParts && parseInt(dayParts[1]) === curDay;
+        const rowCls = isToday ? 'upcoming' : '';
+
+        html += `<tr class="${rowCls}" id="trow-${t.id}">
+          <td class="mono">
+            <span class="termin-datum" onclick="editTerminDatum('${t.id}')" style="cursor:pointer;border-bottom:1px dashed var(--border);" title="Klicken zum Ändern">${t.datum}</span>
+          </td>
+          <td>
+            <span class="termin-text" onclick="editTerminText('${t.id}')" style="cursor:pointer;" title="Klicken zum Ändern">${t.termin}</span>
+          </td>
+          <td class="notiz-col">
+            <span onclick="editTerminNotiz('${t.id}')" style="cursor:pointer;" title="Klicken zum Ändern">${t.notiz||'<span style="color:var(--border)">–</span>'}</span>
+          </td>
+          <td class="edit-cell">
+            <button class="row-del-btn" onclick="deleteTermin('${t.id}')">✕</button>
+          </td>
+        </tr>`;
+      });
     });
   }
   html += '</tbody>';
