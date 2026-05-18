@@ -117,8 +117,8 @@
   }
   .task-row.heute       { background: var(--heute-bg); border-color: var(--heute-border); border-left: 3px solid var(--heute-border); }
   .task-row.diese-woche { background: var(--woche-bg); border-color: var(--woche-border); border-left: 3px solid var(--woche-border); }
-  .task-row.dragging    { opacity: 0.35; }
-  .task-row.drag-over   { box-shadow: 0 -3px 0 0 var(--heute-border); }
+  .task-row.warte-auf { background: #F5F3FF; border-color: #8B5CF6; border-left: 3px solid #8B5CF6; }
+  .task-row.warte-auf .task-prio { color: #6D28D9; }
 
   /* mobile: two-row card */
   .t-top { display: flex; align-items: stretch; min-height: 48px; }
@@ -478,6 +478,7 @@
   <button class="filter-btn" onclick="showView('Diese Woche',this)">Diese Woche</button>
   <button class="filter-btn" onclick="showView('To Do',this)">To Do</button>
   <button class="filter-btn" onclick="showView('Sonderthema',this)">Sonderthemen</button>
+  <button class="filter-btn" onclick="showView('Warte auf',this)">⏳ Warte auf</button>
   <button class="filter-btn" onclick="showView('Erledigt',this)">Erledigt</button>
   <div class="filter-sep"></div>
   <button class="filter-btn" onclick="showView('schnell',this)" style="border-color:#F59E0B;color:#92400E;">⚡ Jetzt</button>
@@ -506,6 +507,7 @@
       <option value="Diese Woche">Diese Woche</option>
       <option value="To Do" selected>To Do</option>
       <option value="Sonderthema">Sonderthema</option>
+      <option value="Warte auf">Warte auf…</option>
     </select>
     <input type="text" id="fi-bereich" placeholder="Bereich" />
   </div>
@@ -535,6 +537,7 @@
         <option value="Diese Woche">Diese Woche</option>
         <option value="To Do" selected>To Do</option>
         <option value="Sonderthema">Sonderthema</option>
+        <option value="Warte auf">Warte auf…</option>
       </select>
       <input id="vc-bereich" type="text" placeholder="Bereich (opt.)" style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);outline:none;min-height:46px;">
     </div>
@@ -556,6 +559,7 @@
         <option value="Diese Woche">Diese Woche</option>
         <option value="To Do">To Do</option>
         <option value="Sonderthema">Sonderthema</option>
+        <option value="Warte auf">Warte auf…</option>
       </select>
     </div>
     <div><label>Bereich</label><input type="text" id="em-bereich" /></div>
@@ -655,6 +659,7 @@
   <div class="move-popup-item" data-prio="Diese Woche">📅 Diese Woche</div>
   <div class="move-popup-item" data-prio="To Do">○ To Do</div>
   <div class="move-popup-item" data-prio="Sonderthema">◈ Sonderthema</div>
+  <div class="move-popup-item" data-prio="Warte auf" style="border-top:1px solid var(--border);">⏳ Warte auf…</div>
   <div class="move-popup-item" data-prio="__jetzt__" style="border-top:2px solid var(--border);">⚡ Jetzt</div>
 </div>
 
@@ -675,6 +680,7 @@
       <button onclick="mobSheetNav('Diese Woche')" class="sheet-btn">📅 Diese Woche</button>
       <button onclick="mobSheetNav('To Do')"       class="sheet-btn">○ To Do</button>
       <button onclick="mobSheetNav('Sonderthema')" class="sheet-btn">◈ Sonderthema</button>
+      <button onclick="mobSheetNav('Warte auf')"   class="sheet-btn">⏳ Warte auf…</button>
       <button onclick="mobSheetNav('Erledigt')"    class="sheet-btn">✓ Erledigt</button>
       <button onclick="mobSheetNav('regelmaessig')"class="sheet-btn">🔁 Regelmäßig</button>
       <button onclick="mobSheetNav('zukunft')"     class="sheet-btn">🔭 Zukunft</button>
@@ -714,8 +720,8 @@ let schnellItems = [];
 let currentFilter = 'alle';
 let activeMoveId = null, dragSrcId = null;
 
-const PRIO_ORDER = ['Heute','Diese Woche','To Do','Sonderthema'];
-const SECTION_LABELS = { 'Heute':'Heute','Diese Woche':'Diese Woche','To Do':'To Do','Sonderthema':'Sonderthemen' };
+const PRIO_ORDER = ['Heute','Diese Woche','To Do','Sonderthema','Warte auf'];
+const SECTION_LABELS = { 'Heute':'Heute','Diese Woche':'Diese Woche','To Do':'To Do','Sonderthema':'Sonderthemen','Warte auf':'Warte auf …' };
 
 const DEFAULT_TASKS = [
   {id:1,  prio:'Heute',       text:'Coinlist Transaktionen vornehmen',                       bereich:'Finanzen',      notiz:'',  zeit:'', ord:0},
@@ -919,10 +925,11 @@ function applyData(p) {
 }
 
 // ── View switching ──────────────────────────────────
-const TASK_FILTERS = ['alle','Heute','Diese Woche','To Do','Sonderthema','Erledigt'];
+const TASK_FILTERS = ['alle','Heute','Diese Woche','To Do','Sonderthema','Warte auf','Erledigt'];
 const MOB_TITLES = {
   'alle':'Alle Aufgaben','Heute':'Heute','Diese Woche':'Diese Woche',
   'To Do':'To Do','Sonderthema':'Sonderthemen','Erledigt':'Erledigt',
+  'Warte auf':'⏳ Warte auf…',
   'schnell':'⚡ Jetzt','termine':'📅 Termine','geburtstage':'🎂 Geburtstage',
   'regelmaessig':'🔁 Regelmäßig','zukunft':'🔭 Zukunft','suche':'🔍 Suche'
 };
@@ -982,6 +989,7 @@ function closeMehr(e) {
 function prioClass(p) {
   if (p==='Heute') return 'heute';
   if (p==='Diese Woche') return 'diese-woche';
+  if (p==='Warte auf') return 'warte-auf';
   return '';
 }
 function noteHtml(n) {
@@ -1440,33 +1448,38 @@ function cleanup() {
   dragSrcId=null;
 }
 
-// ── Touch drag (mobile) ──
+// ── Touch drag (mobile) – long press to activate ──
 let touchSrcId = null, touchClone = null, touchLastOver = null;
+let touchTimer = null, touchActive = false;
 
 function touchStart(e, id) {
   touchSrcId = id;
-  const row = document.getElementById('tr-'+id);
-  if (!row) return;
-  const rect = row.getBoundingClientRect();
-  touchClone = row.cloneNode(true);
-  touchClone.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;opacity:0.7;z-index:9999;pointer-events:none;`;
-  document.body.appendChild(touchClone);
-  row.style.opacity = '0.35';
+  touchActive = false;
+  touchTimer = setTimeout(() => {
+    touchActive = true;
+    const row = document.getElementById('tr-'+id);
+    if (!row) return;
+    // Vibrate to signal drag start
+    if (navigator.vibrate) navigator.vibrate(40);
+    const rect = row.getBoundingClientRect();
+    touchClone = row.cloneNode(true);
+    touchClone.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;opacity:0.7;z-index:9999;pointer-events:none;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.2);`;
+    document.body.appendChild(touchClone);
+    row.style.opacity = '0.35';
+  }, 500);
 }
 
 function touchMove(e) {
-  if (!touchSrcId || !touchClone) return;
+  if (!touchActive || !touchSrcId || !touchClone) return;
   e.preventDefault();
   const t = e.touches[0];
   touchClone.style.top = (t.clientY - 30) + 'px';
-  touchClone.style.left = touchClone.style.left;
-  // Find element under touch
   touchClone.style.display = 'none';
   const el = document.elementFromPoint(t.clientX, t.clientY);
   touchClone.style.display = '';
   const row = el?.closest('.task-row');
   if (touchLastOver && touchLastOver !== row) {
-    document.getElementById('tr-'+touchLastOver.dataset.id)?.classList.remove('drag-over');
+    touchLastOver.classList.remove('drag-over');
   }
   if (row && row.id !== 'tr-'+touchSrcId) {
     row.classList.add('drag-over');
@@ -1475,7 +1488,8 @@ function touchMove(e) {
 }
 
 function touchEnd(e, id) {
-  if (!touchSrcId) return;
+  clearTimeout(touchTimer);
+  if (!touchActive) { touchSrcId = null; return; }
   if (touchClone) { touchClone.remove(); touchClone = null; }
   const row = document.getElementById('tr-'+touchSrcId);
   if (row) row.style.opacity = '';
@@ -1496,7 +1510,7 @@ function touchEnd(e, id) {
       }
     }
   }
-  touchSrcId = null;
+  touchSrcId = null; touchActive = false;
 }
 
 // ── Add form ──
