@@ -119,6 +119,8 @@
   .task-row.diese-woche { background: var(--woche-bg); border-color: var(--woche-border); border-left: 3px solid var(--woche-border); }
   .task-row.warte-auf { background: #F5F3FF; border-color: #8B5CF6; border-left: 3px solid #8B5CF6; }
   .task-row.warte-auf .task-prio { color: #6D28D9; }
+  .task-row.beruf { background: #ECFDF5; border-color: #10B981; border-left: 3px solid #10B981; }
+  .task-row.beruf .task-prio { color: #065F46; }
 
   /* mobile: two-row card */
   .t-top { display: flex; align-items: stretch; min-height: 48px; }
@@ -479,6 +481,7 @@
   <button class="filter-btn" onclick="showView('To Do',this)">To Do</button>
   <button class="filter-btn" onclick="showView('Sonderthema',this)">Sonderthemen</button>
   <button class="filter-btn" onclick="showView('Warte auf',this)">⏳ Warte auf</button>
+  <button class="filter-btn" onclick="showView('Beruf',this)">💼 Beruf</button>
   <button class="filter-btn" onclick="showView('Erledigt',this)">Erledigt</button>
   <div class="filter-sep"></div>
   <button class="filter-btn" onclick="showView('schnell',this)" style="border-color:#F59E0B;color:#92400E;">⚡ Jetzt</button>
@@ -508,8 +511,8 @@
       <option value="To Do" selected>To Do</option>
       <option value="Sonderthema">Sonderthema</option>
       <option value="Warte auf">Warte auf…</option>
-    </select>
-    <input type="text" id="fi-bereich" placeholder="Bereich" />
+      <option value="Beruf">Beruf</option>
+    </select>    <input type="text" id="fi-bereich" placeholder="Bereich" />
   </div>
   <input type="text" id="fi-notiz" class="form-notiz" placeholder="Notiz / Link (optional)" />
   <div class="form-actions">
@@ -660,6 +663,7 @@
   <div class="move-popup-item" data-prio="To Do">○ To Do</div>
   <div class="move-popup-item" data-prio="Sonderthema">◈ Sonderthema</div>
   <div class="move-popup-item" data-prio="Warte auf" style="border-top:1px solid var(--border);">⏳ Warte auf…</div>
+  <div class="move-popup-item" data-prio="Beruf">💼 Beruf</div>
   <div class="move-popup-item" data-prio="__jetzt__" style="border-top:2px solid var(--border);">⚡ Jetzt</div>
 </div>
 
@@ -681,6 +685,7 @@
       <button onclick="mobSheetNav('To Do')"       class="sheet-btn">○ To Do</button>
       <button onclick="mobSheetNav('Sonderthema')" class="sheet-btn">◈ Sonderthema</button>
       <button onclick="mobSheetNav('Warte auf')"   class="sheet-btn">⏳ Warte auf…</button>
+      <button onclick="mobSheetNav('Beruf')"        class="sheet-btn">💼 Beruf</button>
       <button onclick="mobSheetNav('Erledigt')"    class="sheet-btn">✓ Erledigt</button>
       <button onclick="mobSheetNav('regelmaessig')"class="sheet-btn">🔁 Regelmäßig</button>
       <button onclick="mobSheetNav('zukunft')"     class="sheet-btn">🔭 Zukunft</button>
@@ -720,8 +725,8 @@ let schnellItems = [];
 let currentFilter = 'alle';
 let activeMoveId = null, dragSrcId = null;
 
-const PRIO_ORDER = ['Heute','Diese Woche','To Do','Sonderthema','Warte auf'];
-const SECTION_LABELS = { 'Heute':'Heute','Diese Woche':'Diese Woche','To Do':'To Do','Sonderthema':'Sonderthemen','Warte auf':'Warte auf …' };
+const PRIO_ORDER = ['Heute','Diese Woche','To Do','Sonderthema','Warte auf','Beruf'];
+const SECTION_LABELS = { 'Heute':'Heute','Diese Woche':'Diese Woche','To Do':'To Do','Sonderthema':'Sonderthemen','Warte auf':'Warte auf …','Beruf':'Beruf' };
 
 const DEFAULT_TASKS = [
   {id:1,  prio:'Heute',       text:'Coinlist Transaktionen vornehmen',                       bereich:'Finanzen',      notiz:'',  zeit:'', ord:0},
@@ -925,11 +930,11 @@ function applyData(p) {
 }
 
 // ── View switching ──────────────────────────────────
-const TASK_FILTERS = ['alle','Heute','Diese Woche','To Do','Sonderthema','Warte auf','Erledigt'];
+const TASK_FILTERS = ['alle','Heute','Diese Woche','To Do','Sonderthema','Warte auf','Beruf','Erledigt'];
 const MOB_TITLES = {
   'alle':'Alle Aufgaben','Heute':'Heute','Diese Woche':'Diese Woche',
   'To Do':'To Do','Sonderthema':'Sonderthemen','Erledigt':'Erledigt',
-  'Warte auf':'⏳ Warte auf…',
+  'Warte auf':'⏳ Warte auf…','Beruf':'💼 Beruf',
   'schnell':'⚡ Jetzt','termine':'📅 Termine','geburtstage':'🎂 Geburtstage',
   'regelmaessig':'🔁 Regelmäßig','zukunft':'🔭 Zukunft','suche':'🔍 Suche'
 };
@@ -990,6 +995,7 @@ function prioClass(p) {
   if (p==='Heute') return 'heute';
   if (p==='Diese Woche') return 'diese-woche';
   if (p==='Warte auf') return 'warte-auf';
+  if (p==='Beruf') return 'beruf';
   return '';
 }
 function noteHtml(n) {
